@@ -1,0 +1,25 @@
+version: 0.2
+phases:
+  install:
+    runtime-versions:
+      php: 7.3
+    commands:
+      - pip install --upgrade pip
+      - pip install pipenv --user
+      - pipenv install awscli aws-sam-cli
+  build:
+    commands:      
+      - magento_zip="magento-ce-2.3.5-p1-$(date +%Y%m%d%H%M)".tar.gz
+      - tar -cvzf "/tmp/${magento_zip}" .
+      - aws s3 cp "/tmp/${magento_zip}" s3://faarms-magento/
+      - decodedPwd="$(aws kms decrypt --ciphertext-blob fileb://enc-faarms-file  --output text --query Plaintext | base64 --decode)"
+      - sed -i "s/password/${decodedPwd}/g" prod.json
+      - sed -i "s/magentozip/https:\/\/faarms-magento.s3.ap-south-1.amazonaws.com\/${magento_zip}/g" prod.json
+  post_build:
+    commands:
+      - if [ $CODEBUILD_BUILD_SUCCEEDING = 1 ]; then echo Build completed on `date`; echo Starting deployment; else echo Build failed ignoring deployment; exit 1; fi
+artifacts:
+  files:
+    - faarms-magento-template.yml
+    - prod.json    
+  discard-paths: yes
